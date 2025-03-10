@@ -31,7 +31,7 @@ def record_page(url):
             cells[0] = replace_key(cells[0])
             cells[1] = str(cells[1]).replace("\xa0", '')
             if cells[0] == 'date':
-                cells[1] = str(cells[1])
+                cells[1] = f"{cells[1]}"
 
             rows.append(cells)
 
@@ -84,7 +84,7 @@ def get_rec(year):
     return results
 
 
-years = range(1920,1922)
+years = range(1970, 2001)
 for yr in years:
     arr = []
     start = time()
