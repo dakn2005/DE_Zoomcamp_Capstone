@@ -1,0 +1,183 @@
+
+id: hw_data_warehousing
+namespace: zoomcamp
+description: |
+  capstone project for plane-crashes analysis 
+  source: https://www.planecrashinfo.com/database.htm
+# inputs:
+#   - id: year
+#     type: SELECT
+#     displayName: Select year
+#     values: "{{ range(1920, 2026) | list }}"
+#     defaults: 2024
+
+variables:
+  file: "{{trigger.date | date('yyyy')}}.json"
+  gcs_file: "gs://{{kv('GCP_BUCKET_NAME_4')}}/{{vars.file}}"
+  # table: "{{kv('GCP_DATASET')}}.{{inputs.taxi}}_tripdata_{{trigger.date | date('yyyy_MM')}}"
+  data: "{{outputs.extract.outputFiles[(trigger.date | date('yyyy')) ~ '.json']}}"
+
+tasks:
+  - id: set_label
+    type: io.kestra.plugin.core.execution.Labels
+    labels:
+      file: "{{render(vars.file)}}"
+      # taxi: "{{inputs.taxi}}"
+
+  
+  - id: extract-table
+    type: io.kestra.plugin.scripts.python.Script
+    runner: DOCKER
+    requirements:
+      - beautifulsoup4
+      - lxml
+      - pandas
+    script: |
+      from io import StringIO
+      import requests
+      from bs4 import BeautifulSoup
+      import pandas as pd
+      from concurrent.futures import ThreadPoolExecutor
+      import time
+      import json
+
+      def replace_key(key: str):
+          key = key.replace(":", "").replace("#", "").replace(" ", "").lower()
+
+          match key:
+              case "ac\ntype":
+                  return "actype"
+              case "cn/ln":
+                  return "cn_ln"
+              case _:
+                  return key
+
+      def record_page(url):
+          response = requests.get(url)
+          soup = BeautifulSoup(response.text, "html.parser")
+
+          # Find the first table
+          table = soup.find("table")
+
+          # Extract rows
+          if not table:
+              return dict([])
+
+          rows = []
+          for tr in table.find_all("tr")[1:]:
+              cells = [td.text.strip() for td in tr.find_all("td")]
+              if cells:
+                  cells[0] = replace_key(cells[0])
+                  cells[1] = str(cells[1]).replace("\xa0", "")
+                  if cells[0] == "date":
+                      cells[1] = f"{cells[1]}"
+
+                  rows.append(cells)
+
+          return dict(rows)
+
+      def get_rec(year):
+          base_url = f"https://www.planecrashinfo.com/{year}"
+          # Fetch the HTML content
+          url = f"{base_url}/{year}"
+          response = requests.get(
+              f"{url}.htm",
+              headers={
+                  "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+              },
+          )
+          # response = requests.get('https://example.com')
+          soup = BeautifulSoup(response.text, "html.parser")
+
+          # Find the first table
+          table = soup.find("table")
+
+          if table is None:
+              return None
+
+          # Extract headers
+          headers = [td.text.strip() for td in table.find_all("tr")[0]]
+
+          # Extract rows
+          rows = []
+          cnt = 0
+          for tr in table.find_all("tr")[1:]:  # Skip header row
+              cells = [td.text.strip() for td in tr.find_all("td")]
+              if cells:
+                  rows.append(cells)
+                  cnt += 1
+
+          # # Convert to DataFrame
+          # df = pd.DataFrame(rows, columns=headers)
+
+          # # Display DataFrame
+          # df.head()
+
+          urls = []
+          for i in range(1, cnt + 1):
+              urls.append(f"{url}-{i}.htm")
+
+          # results = record_page(urls[0])
+
+          with ThreadPoolExecutor() as executor:
+              results = executor.map(record_page, urls)
+
+          # print(results)
+          return results
+
+      yr = `{{trigger.date | date('yyyy')}}`
+      arr = []
+      # start = time.time()
+      records = get_rec(yr)
+
+      if records is None:
+          print(f"failed: {yr}")
+      else:
+          print(yr)
+          for rec in records:
+              # print(rec)
+              arr.append(rec)
+
+          json_string = json.dumps(arr)
+          df = pd.read_json(StringIO(json_string))
+
+          # print("total time {:.2f}s".format(time.time() - start))
+          # print(arr[0])
+          # df.head()
+          df.to_json(
+              `{{render(vars.file)}}`,
+              orient="records",
+              # lines=True
+          )
+
+      time.sleep(30)
+
+  - id: upload_to_gcs
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{render(vars.data)}}"
+    to: "{{render(vars.gcs_file)}}"
+
+  - id: purge_files
+    type: io.kestra.plugin.core.storage.PurgeCurrentExecutionFiles
+    description: To avoid cluttering your storage, we will remove the downloaded files
+
+pluginDefaults:
+  - type: io.kestra.plugin.gcp
+    values:
+      serviceAccount: "{{kv('GCP_CREDS')}}"
+      projectId: "{{kv('GCP_PROJECT_ID')}}"
+      location: "{{kv('GCP_LOCATION')}}"
+      bucket: "{{kv('GCP_BUCKET_NAME_4')}}"
+
+triggers:
+  - id: scheduler
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 9 1 * *"
+    # inputs:
+    #   year: green
+
+  # - id: yellow_schedule
+  #   type: io.kestra.plugin.core.trigger.Schedule
+  #   cron: "0 10 1 * *"
+  #   inputs:
+  #     taxi: yellow

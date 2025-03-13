@@ -24,11 +24,13 @@ def replace_key(key: str):
 async def record_page(url):
     session = AsyncHTMLSession()
     r = await session.get(url)
-    r.html.arender()
+    await r.html.arender()
     soup = BeautifulSoup(r.html.html, "html.parser")
 
     # Find the first table
     table = soup.find("table")
+    if not table:
+        return dict([])
     
     # Extract rows
     rows = []
@@ -50,7 +52,7 @@ async def get_rec(year):
     url = f"{base_url}/{year}"
     session = AsyncHTMLSession()
     r = await session.get(f"{url}.htm")
-    r.html.arender()  # this call executes the js in the page
+    await r.html.arender()  # this call executes the js in the page
 
     soup = BeautifulSoup(r.html.html, "html.parser")
 
@@ -66,6 +68,7 @@ async def get_rec(year):
     # Extract rows
     rows = []
     cnt = 0
+    # print(table)
     for tr in table.find_all("tr")[1:]:  # Skip header row
         cells = [td.text.strip() for td in tr.find_all("td")]
         if cells:
@@ -92,12 +95,15 @@ async def get_rec(year):
     #     results = executor.map(record_page, urls)
 
     results = await asyncio.gather(*tasks)
+
+    await asyncio.sleep(10)  
     
     # print(results)
     return results
 
 
-years = range(1970, 2001)
+years = range(1990, 2001)
+# years  = [1990]
 for yr in years:
     arr = []
     start = time()
