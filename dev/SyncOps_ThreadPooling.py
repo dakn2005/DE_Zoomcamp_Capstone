@@ -36,8 +36,8 @@ def record_page(url):
         if cells:
             cells[0] = replace_key(cells[0])
             cells[1] = str(cells[1]).replace("\xa0", "")
-            if cells[0] == "date":
-                cells[1] = f"{cells[1]}"
+            # if cells[0] == "date":
+            #     cells[1] = f"{cells[1]}"
 
             rows.append(cells)
 
@@ -93,13 +93,15 @@ def get_rec(year):
     print(results)
     return results
 
-
-years = range(2001, 2007)
+years = [2002]
+# years = range(2007, 2011)
 # years = [1974, 1978, 1980, 1983, 1984, 1996]
 for yr in years:
     arr = []
     start = time.time()
     records = get_rec(yr)
+
+    time.sleep(20)
 
     if records is None:
         print(f"failed: {yr}")
@@ -114,14 +116,20 @@ for yr in years:
 
         print("total time {:.2f}s".format(time.time() - start))
         # print(arr[0])
+        
+        df['summary'] = df['summary'].str.replace(r'[^a-zA-Z0-9 ]', '', regex=True)
 
         # df.head()
-        df.to_json(
-            f"output/{yr}.json",
-            orient="records",
-            # lines=True
+        df.to_csv(
+            f"output/{yr}.csv",
+            index=False,
+            sep='|'
         )
-
-    time.sleep(30)
+        
+        # df.to_json(
+        #     f"output/{yr}.json",
+        #     orient="records",
+        #     # lines=True
+        # )
 
 print('fin!')

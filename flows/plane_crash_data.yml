@@ -1,9 +1,9 @@
-
-id: hw_data_warehousing
+id: plane_crash_data
 namespace: zoomcamp
 description: |
   capstone project for plane-crashes analysis 
   source: https://www.planecrashinfo.com/database.htm
+
 # inputs:
 #   - id: year
 #     type: SELECT
@@ -12,10 +12,9 @@ description: |
 #     defaults: 2024
 
 variables:
-  file: "{{trigger.date | date('yyyy')}}.json"
-  gcs_file: "gs://{{kv('GCP_BUCKET_NAME_4')}}/{{vars.file}}"
-  # table: "{{kv('GCP_DATASET')}}.{{inputs.taxi}}_tripdata_{{trigger.date | date('yyyy_MM')}}"
-  data: "{{outputs.extract.outputFiles[(trigger.date | date('yyyy')) ~ '.json']}}"
+  file: "{{trigger.date | date('yyyy')}}.csv"
+  gcs_file: "gs://{{kv('GCP_BUCKET_NAME_4')}}/csvs/{{vars.file}}"
+  data: "{{outputs.extract.outputFiles[(trigger.date | date('yyyy')) ~ '.csv']}}"
 
 tasks:
   - id: set_label
@@ -24,14 +23,19 @@ tasks:
       file: "{{render(vars.file)}}"
       # taxi: "{{inputs.taxi}}"
 
-  
-  - id: extract-table
+  - id: extract
     type: io.kestra.plugin.scripts.python.Script
+    # containerImage: python:3.11-alpine
     runner: DOCKER
-    requirements:
-      - beautifulsoup4
-      - lxml
-      - pandas
+    beforeCommands:
+      - pip install beautifulsoup4 lxml pandas
+    outputFiles:
+      - "{{render(vars.file)}}"
+    # requirements:
+    #   - beautifulsoup4
+    #   - lxml
+    #   - pandas
+
     script: |
       from io import StringIO
       import requests
@@ -87,10 +91,13 @@ tasks:
               },
           )
           # response = requests.get('https://example.com')
+          
           soup = BeautifulSoup(response.text, "html.parser")
 
           # Find the first table
           table = soup.find("table")
+
+          # print(year, table)
 
           if table is None:
               return None
@@ -125,15 +132,16 @@ tasks:
           # print(results)
           return results
 
-      yr = `{{trigger.date | date('yyyy')}}`
+      yr = {{trigger.date | date('yyyy')}}
       arr = []
       # start = time.time()
       records = get_rec(yr)
 
+      # time.sleep(20)
+
       if records is None:
           print(f"failed: {yr}")
       else:
-          print(yr)
           for rec in records:
               # print(rec)
               arr.append(rec)
@@ -141,16 +149,25 @@ tasks:
           json_string = json.dumps(arr)
           df = pd.read_json(StringIO(json_string))
 
+          df['summary'] = df['summary'].str.replace(r'[^a-zA-Z0-9\s\.]', '', regex=True)
+
+          df.to_csv(
+              "{{render(vars.file)}}",
+              index=False,
+              sep='|'
+          )
+
           # print("total time {:.2f}s".format(time.time() - start))
           # print(arr[0])
           # df.head()
-          df.to_json(
-              `{{render(vars.file)}}`,
-              orient="records",
-              # lines=True
-          )
 
-      time.sleep(30)
+          # df.to_json(
+          #     "{{render(vars.file)}}",
+          #     orient="records",
+          #     # lines=True
+          # )
+
+          print("success: {{render(vars.file)}}")
 
   - id: upload_to_gcs
     type: io.kestra.plugin.gcp.gcs.Upload
@@ -172,12 +189,5 @@ pluginDefaults:
 triggers:
   - id: scheduler
     type: io.kestra.plugin.core.trigger.Schedule
-    cron: "0 9 1 * *"
-    # inputs:
-    #   year: green
-
-  # - id: yellow_schedule
-  #   type: io.kestra.plugin.core.trigger.Schedule
-  #   cron: "0 10 1 * *"
-  #   inputs:
-  #     taxi: yellow
+    cron: "@yearly"
+    # cron: "0 9 1 * *"
