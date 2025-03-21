@@ -93,7 +93,7 @@ def get_rec(year):
     print(results)
     return results
 
-years = [2002]
+years = [2025]
 # years = range(2007, 2011)
 # years = [1974, 1978, 1980, 1983, 1984, 1996]
 for yr in years:
