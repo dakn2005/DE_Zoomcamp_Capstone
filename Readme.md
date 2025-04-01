@@ -64,7 +64,9 @@ The data contains the fields below:
 
 - Follow the GCP instructions in setting up a project
 
-- We set up a service to aide terraform in accessing the GCP platform. Configure the GCP service account by accessing I&M and Admin -> service accounts -> create service account. Add the required roles (Bigquery Admin, Compute Admin and Storage Admin)
+- We set up a service account to aide Kestra/Terraform/Other infrastructure tool in accessing the GCP platform. 
+  
+- Configure the GCP service account by accessing I&M and Admin -> service accounts -> create service account. Add the required roles (Bigquery Admin, Compute Admin and Storage Admin)
 
 - To get the service account key, click on the dropdown -> manage keys -> create key (choose JSON). This downloads the key to be used in Kestra to setup Bigquery db and Bucket in this instance
 
@@ -72,13 +74,20 @@ The data contains the fields below:
 
 <details>
 <summary>Kestra Setup</summary>
-Ensure to docker is setup and installed as per your operating system (ensure docker engine is installed). Follow the instructions [here](https://docs.docker.com/engine/install/). Ensure to run the hello-world command to ensure docker is properly running
+Ensure to docker is setup and installed as per your operating system (ensure docker engine is installed). Follow the instructions [here](https://docs.docker.com/engine/install/). 
+
+Go the [kestra website](https://kestra.io/docs/getting-started/quickstart#start-kestra) -> get Started -> goto the commands code. 
+
+```
+docker run --pull=always --rm -it -p 8080:8080 --user=root -v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp kestra/kestra:latest server local
+```
+
+Ensure to run the hello-world command to ensure docker is properly running
 
 ```
  sudo docker run hello-world
 ```
 
-Go the [kestra website](https://kestra.io/docs/getting-started/quickstart#start-kestra) -> get Started -> goto the commands code. 
 </details>
 
 <details>
@@ -88,7 +97,18 @@ Go the [kestra website](https://kestra.io/docs/getting-started/quickstart#start-
 
 </details>
 
-## Dashboards
+### Data Warehouse
+**Google Cloud Storage** - used for storing csv files that have been converted from the orchestration flow script. The CSV files are saved for individual years
+![GCS bucket](public/bucket.png)
 
 
+**Bigquery** - create an external table with data from the bucket. This table is used in DBT to set the staging table, which assigns proper data types to the columns after the data cleaning process. The staging table is then used to create fact tables.
 
+### LLM in Bigquery
+
+
+### DBT Cloud
+![dbt models, db schema](public/dbt_schema.png)
+
+
+## [Dashboards](https://lookerstudio.google.com/s/h85L32U2D1E)

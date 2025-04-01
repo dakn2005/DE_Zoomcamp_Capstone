@@ -1,8 +1,4 @@
-# Plane Incidents over the Century
-
-## Objective
-
-## Data Sources
+# Plane Incidents Data
 
 
 #### Dataset 
@@ -44,7 +40,7 @@ select * from `external_data_2`
   - added allow_quoted_newlines = true for CSV multi-line text
 
 ### DBT 
-DBT models and links are in this repository
+DBT models and links are in this [repository](https://github.com/dakn2005/dbt_capstone_repo)
 
 ### Bigquery LLM Classifier
 Classification options
