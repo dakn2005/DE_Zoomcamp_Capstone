@@ -1,99 +1,114 @@
-#### Dataset 
+# Plane Incidents over the Century
+### Introduction
+Having been on several flights this year, this got me thinking about recent plane incidents, with Boeing being the manufacturer that instantly comes into mind, including the Sunita Williams space shuttle snafu.
+
+On this, I recently read an article from [The Guardian](https://www.theguardian.com/us-news/2025/mar/01/plane-crash-safety-data) on plane safety data. as quoted from the article:
 ```
-CREATE OR REPLACE external TABLE `marine-base-449315-s5.zoomcamp_capstone.external_data_2` (
-  `date` date,
-  `time` string,
-  location string,
-  operator string,
-  flight string,
-  route string,
-  actype string,
-  registration string,
-  cn_ln string,
-  aboard string, 
-  fatalities string, 
-  ground string, 
-  summary string
+But the numbers suggest 2025 has actually been a relatively safe year to fly – at least in terms of the overall number of accidents". 
+```
+Let's exam this corollary, and find out for ourselves whether this is true using the power of data engineering
+## Objective
+Investigate flight safety over the last century (circa 1920 to 2025). 
+We can use this data to answer some interesting questions are plane incidents
+1. What's the Year over Year incident levels for the last 100 years
+2. What's the decode over decade incident levels
+3. What are the causes of incidents as summarized by AI (using gemini LLM in bigquery)
+4. which manufacturer is calpable - investigating incidents classified as manufacturer defect/negligence 
+### Data Sources
+The [planecrashinfo](https://www.planecrashinfo.com/) website that collates incidents data from various sources.
+The data is obtained by clicking on the database section of the website, 
+![landing page](public/pc0.png)
+after clicking on the database link, the years are displayed as below
+![landing page](public/pc1.png)
+on clicking on a selected year, the table below is shown
+![landing page](public/pc2.png)
+after clicking on a specific date, the below details are obtained. 
+![landing page](public/pc3.png)
+
+Fortunately, this process is automated in a Kestra flow, and the schema described in the <kbd>data</kbd> section is obtained
+
+
+#### Data
+The data contains the fields below: 
+- Date
+- Time
+- Location
+- Operator
+- Flight
+- Route
+- AC Type
+- Registration
+- cn/ln
+- Aboard
+- Fatalities
+- Ground
+- Summary
+
+### Technologies
+- Docker (containerization)
+- Terraform (infrastructure as code)
+- Kestra (workflow orchestration)
+- Google Cloud Storage (data lake)
+- BigQuery (data warehouse)
+  - Bigquery ML (summaries classification)
+- dbt (data transformation)
+- Looker Studio (data visualization)
+
+## Data Pipeline
+![landing page](public/IaC.png
 )
-OPTIONS (
-  format = 'csv',
-  skip_leading_rows = 1,
-  -- field_delimiter = '|',
-  allow_quoted_newlines = true,
-  uris = [
-    'gs://marine-base-449315-s5-kestra-bucket-4/2002.csv'
-    ]
-);
 
-select * from `zoomcamp_capstone.external_data_2`
-;
-```
+## Reproducability
+<details>
+<summary>GCP Setup</summary>
 
-#### Challenges
-- scare aggregated data source - apis failing to work
-- obtaining data - the actual data were links after accessing the landing page for the specific year
-- String process - free text has special characters (e.g. apostrophes, hashed) 
-  - preprocessed this at the dataframe stage before saving as CSV
-  - added allow_quoted_newlines = true for CSV multi-line text
+- Follow the GCP instructions in setting up a project
 
-### DBT 
-DBT models and links are in this repository
+- We set up a service account to aide Kestra/Terraform/Other infrastructure tool in accessing the GCP platform. 
+  
+- Configure the GCP service account by accessing I&M and Admin -> service accounts -> create service account. Add the required roles (Bigquery Admin, Compute Admin and Storage Admin)
 
-### Bigquery LLM Classifier
-Classification options
-- Manufacturer negligence 
-- Operator(ions) error
-- Pilot error
-- Terrorism
-- Indeterminate
+- To get the service account key, click on the dropdown -> manage keys -> create key (choose JSON). This downloads the key to be used in Kestra to setup Bigquery db and Bucket in this instance
 
-#### Bigquey ML
-```
-DECLARE prompt_text STRING;
-SET prompt_text = 'from the text classify into these options: Manufacturer defect/negligence, Operator error, Pilot error, Terrorism, Indeterminate; do not explain and do not give a null, the answer must be classified into one of the provided categories, if unsure choose Indeterminate: ';
+</details>
 
-MERGE INTO `zoomcamp_capstone.stg_incident_data` AS t
-USING (
-  WITH prompt_tab AS (
-    SELECT 
-      record_id,
-      CONCAT(prompt_text, summary) AS prompt,
-      summary
-    FROM `zoomcamp_capstone.stg_incident_data`
-    WHERE ml_classification = ''
-    LIMIT 4
-  ),
-  s AS (
-    SELECT 
-      record_id,
-      prompt,
-      ml_generate_text_llm_result
-    FROM ML.GENERATE_TEXT(
-      MODEL `marine-base-449315-s5.models.gemini_model1`,
-      (SELECT * FROM prompt_tab),
-      STRUCT(
-        0.1 AS temperature, 100 AS max_output_tokens, 0.5 AS top_p,
-        40 AS top_k, TRUE AS flatten_json_output
-      )
-    )
-  )
-  SELECT * FROM s
-) AS output
-ON t.record_id = output.record_id
-WHEN MATCHED THEN
-  UPDATE SET ml_classification = output.ml_generate_text_llm_result;
-```
+<details>
+<summary>Kestra Setup</summary>
+Ensure to docker is setup and installed as per your operating system (ensure docker engine is installed). Follow the instructions [here](https://docs.docker.com/engine/install/). 
 
-Generating sentiments is expensive (including time-wise). Because of this, on creatinng these sentiments from the above code, create a back-up table that will act as a seed in dbt when re-runnning models
+Go the [kestra website](https://kestra.io/docs/getting-started/quickstart#start-kestra) -> get Started -> goto the commands code. 
 
 ```
-create or replace table `zoomcamp_capstone.bck_records_sentiment`
-as
-select 
-  record_id, 
-  ml_classification
-from `zoomcamp_capstone.stg_incident_data`
-where ml_classification <> ''
-;
+docker run --pull=always --rm -it -p 8080:8080 --user=root -v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp kestra/kestra:latest server local
 ```
 
+Ensure to run the hello-world command to ensure docker is properly running
+
+```
+ sudo docker run hello-world
+```
+
+</details>
+
+<details>
+<summary>Infrastracture setup with Kestra</summary>
+
+> Instead of using Terraform for this assignment, I preferred using a singular tool for the Infrastracture setup
+
+</details>
+
+### Data Warehouse
+**Google Cloud Storage** - used for storing csv files that have been converted from the orchestration flow script. The CSV files are saved for individual years
+![GCS bucket](public/bucket.png)
+
+
+**Bigquery** - create an external table with data from the bucket. This table is used in DBT to set the staging table, which assigns proper data types to the columns after the data cleaning process. The staging table is then used to create fact tables.
+
+### LLM in Bigquery
+
+
+### DBT Cloud
+![dbt models, db schema](public/dbt_schema.png)
+
+
+## [Dashboards](https://lookerstudio.google.com/s/h85L32U2D1E)
