@@ -87,7 +87,7 @@ WHEN MATCHED THEN
   UPDATE SET ml_classification = output.ml_generate_text_llm_result;
 ```
 
-Generating sentiments is expensive (including time-wise). Because of this, on creatinng these sentiments from the above code, create a back-up table that will act as a seed in dbt when re-runnning models
+Generating sentiments is expensive (including time-wise). Because of this, on creatinng these sentiments from the above code, a back-up table is also created that will act as a seed in dbt when re-runnning models
 
 ```
 create or replace table `bck_records_sentiment`
