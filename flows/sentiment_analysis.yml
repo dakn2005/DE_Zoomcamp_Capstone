@@ -1,17 +1,16 @@
 id: sentiment_analysis
 namespace: zoomcamp
 description: |
-  Best to add a label `backfill:true` from the UI to track executions created via a backfill.
-  CSV data used here comes from: https://github.com/DataTalksClub/nyc-tlc-data/releases
+  capstone 'backfill' sentiment analyses from summary texts
 
 variables:
-  file: "{{trigger.date | date('yyyy')}}.csv"
+  file: "{{trigger.date | date('yyyy-MM-dd hh:mm:ss')}}"
 
 tasks:
   - id: set_label
     type: io.kestra.plugin.core.execution.Labels
     labels:
-      file: "{{render(vars.file)}}"
+      timestamp: "{{render(vars.file)}}"
 
   - id: classification_by_llm
     type: io.kestra.plugin.gcp.bigquery.Query
@@ -19,17 +18,18 @@ tasks:
       DECLARE prompt_text STRING;
       SET prompt_text = 'from the text classify into these options: Manufacturer defect/negligence, Operator error, Pilot error, Terrorism, Indeterminate; do not explain and do not give a null, the answer must be classified into one of the provided categories, if unsure choose Indeterminate: ';
 
-      MERGE INTO `zoomcamp_capstone.stg_incident_data` AS t
+      MERGE INTO `zoomcamp_capstone.fct_incident_data` AS t
       USING (
         WITH prompt_tab AS (
           SELECT 
             record_id,
             CONCAT(prompt_text, summary) AS prompt,
             summary
-          FROM `zoomcamp_capstone.stg_incident_data`
-          WHERE ml_classification = ''
+          FROM `zoomcamp_capstone.fct_incident_data`
+          WHERE ml_classification is null
+          and summary is not null
           AND record_id not in (select record_id from `zoomcamp_capstone.bck_records_sentiment`)
-          LIMIT 10
+          LIMIT 15
         ),
         s AS (
           SELECT 
@@ -57,20 +57,21 @@ tasks:
       select 
         record_id, 
         ml_classification
-      from `zoomcamp_capstone.stg_incident_data`
+      from `zoomcamp_capstone.fct_incident_data`
       where ml_classification <> ''
       ;
+
 
 pluginDefaults:
   - type: io.kestra.plugin.gcp
     values:
       serviceAccount: "{{kv('GCP_CREDS')}}"
       projectId: "{{kv('GCP_PROJECT_ID')}}"
-      location: "{{kv('GCP_LOCATION')}}"
-      bucket: "{{kv('GCP_BUCKET_NAME_4')}}"
+      location: "{{kv('GCP_LOCATION_2')}}"
+      # bucket: "{{kv('GCP_BUCKET_NAME_4')}}"
 
 triggers:
   - id: scheduler
     type: io.kestra.plugin.core.trigger.Schedule
     # cron: "@yearly"
-    cron: "0 9 1 * *"
+    cron: "*/2 * * * *"
