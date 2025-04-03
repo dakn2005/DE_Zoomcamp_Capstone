@@ -11,7 +11,8 @@ But the numbers suggest 2025 has actually been a relatively safe year to fly –
 Let's examine this statement, and find out for ourselves whether this is true using our knowledge of data engineering
 
 ## Objective
-Investigate flight safety over the last century (circa 1920 to 2025). 
+Use data engineering methodologies to investigate flight safety over the last century (circa 1920 to 2025).
+
 We can use this data to answer some interesting questions are plane incidents
 1. What's the Year over Year incident levels for the last 100 years?
 2. What's the decade over decade incident levels. Have things gotten better?
@@ -53,7 +54,7 @@ The data contains the fields below:
 - Kestra (workflow orchestration)
 - Google Cloud Storage (data lake)
 - BigQuery (data warehouse)
-  - Bigquery ML (summaries classification)
+  - Bigquery ML ([classification of summaries](#bigquery-ml))
 - dbt (data transformation)
 - Looker Studio (data visualization)
 
@@ -94,6 +95,68 @@ Ensure to run the hello-world command to ensure docker is properly running
 
 > Instead of using Terraform for this assignment, I preferred using a singular tool for the Infrastracture setup
 
+Setup kestra with the format below. This will be saved as a flow
+
+```
+id: 04_gcp_kv
+namespace: zoomcamp
+
+tasks:
+  - id: gcp_project_id
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_PROJECT_ID
+    kvType: STRING
+    value: [your project id] # unique project id
+
+  - id: gcp_location
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_LOCATION
+    kvType: STRING
+    value: [location value e.g. US or us-central1]  #your preferred location
+
+  - id: gcp_bucket_name
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_BUCKET_NAME
+    kvType: STRING
+    value: [bucket name] # make sure it's globally unique!
+
+  - id: gcp_dataset
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_DATASET
+    kvType: STRING
+    value: [dataset name e.g. zoomcamp]
+```
+
+> ensure to set GCP_CREDS - the downloaded json key file from GCP setup
+> Go to Kestra -> Namespaces -> your namespace -> KV Store -> New Key-Value -> set the GCP_CREDS key (select JSON) -> copy-paste the json key
+
+Create another flow for setup
+
+```
+id: 05_gcp_setup
+namespace: zoomcamp
+
+tasks:
+  - id: create_gcs_bucket
+    type: io.kestra.plugin.gcp.gcs.CreateBucket
+    storageClass: REGIONAL
+    name: "{{kv('GCP_BUCKET_NAME')}}" 
+    ifExists: SKIP
+    
+  - id: create_bq_dataset
+    type: io.kestra.plugin.gcp.bigquery.CreateDataset
+    name: "{{kv('GCP_DATASET')}}"
+    ifExists: SKIP
+
+pluginDefaults:
+  - type: io.kestra.plugin.gcp
+    values:
+      serviceAccount: "{{kv('GCP_CREDS')}}"
+      projectId: "{{kv('GCP_PROJECT_ID')}}"
+      location: "{{kv('GCP_LOCATION')}}"
+      # bucket: "{{kv('GCP_BUCKET_NAME')}}"
+```
+
 </details>
 
 ## Data Pipeline
@@ -104,6 +167,8 @@ The steps employed are:
   - Load - convert data from the website into CSVs -> this is then saved in a bucket on Google Cloud Storage -> which is then loaded into an external table
   - Transform - convert into analytics views from the external table. The processes are described below in the [dbt cloud section](#transformation-using-dbt-cloud)
 
+### Orchestration
+I use Kestra for Orchestration. Orchestration is the process of bringing together disparate activities into a continuous workflow, normally given the monicker 'flow'. 
 
 
 ### Data Warehouse
@@ -148,3 +213,104 @@ The repo also contains several [macros](github.com/dakn2005/dbt_capstone_repo/tr
 
 
 ## [Dashboards](https://lookerstudio.google.com/s/h85L32U2D1E)
+The dashboards contain two pages;
+
+Incidents Overview
+![incidents overview](public/dash_overview.png)
+
+Incidents Classification
+![incidents classified](public/dash_classification.png)
+
+>  *Some major data points to consider when looking into the data (summarised by chatgpt)*
+
+
+1960s: Commercial Jet Boom
+McDonnell Aircraft & Douglas Aircraft → McDonnell Douglas (1967)
+
+- Merged to compete with Boeing in commercial aviation.
+
+- Douglas had produced the DC-series aircraft, while McDonnell was strong in military jets.
+
+---
+
+1970s: European Collaboration
+Airbus Industrie (1970)
+
+- A European consortium formed by France (Aérospatiale), Germany (Deutsche Aerospace), UK (British Aerospace), and Spain (CASA) to counter U.S. manufacturers.
+
+- First aircraft: A300 (world’s first twin-engine widebody jet).
+
+--- 
+
+1990s: Industry Shakeups & Megamergers
+- Lockheed & Martin Marietta → Lockheed Martin (1995)
+
+    - Major merger in defense aviation.
+
+- Boeing & McDonnell Douglas (1997)
+
+  - One of the biggest aerospace mergers ever.
+
+  - Ended McDonnell Douglas’ commercial aircraft production (e.g., MD-11).
+
+- Northrop & Grumman → Northrop Grumman (1994)
+
+  - Focused on military aircraft, including stealth technology.
+
+--- 
+
+2020s: Ongoing Consolidation
+- Airbus acquires full control of A220 program (2020)
+- Boeing & Spirit AeroSystems negotiations (2024+)
+  - Boeing may acquire its key supplier to stabilize production.
+
+
+
+
+
+## Conclusion
+So, as initially claimed in the [problem statement](#problem-statement), it has gotten better in terms of safety which is good news. Despite of this, we have to keep on being vigilant, as witnessed with recent major incidents - in terms of fatalities and incidents' cause - summaries (by chatgpt) within the last 3 decades
+
+
+
+2020s: China Eastern Airlines Flight 5735 (2022) – 132 Dead
+  - Date: March 21, 2022
+  - Aircraft: Boeing 737-800
+  - Location: Guangxi, China
+  - Cause: Suspected deliberate crash (investigation ongoing).
+
+Other Major Crashes:
+
+Pakistan International Airlines Flight 8303 (2020) – 97 dead (pilot error).
+
+Nepal Yeti Airlines Flight 691 (2023) – 72 dead (pilot confusion).
+
+--- 
+
+2010s: Malaysia Airlines Flight 370 (2014) – 239 Missing
+Date: March 8, 2014
+  - Aircraft: Boeing 777
+  - Location: Disappeared over the Indian Ocean
+  - Cause: Unknown (presumed pilot suicide or system failure).
+  
+Other Major Crashes:
+
+Malaysia Airlines Flight 17 (2014) – 298 dead (shot down over Ukraine).
+
+Lion Air Flight 610 (2018) – 189 dead (Boeing 737 MAX software failure).
+
+Ethiopian Airlines Flight 302 (2019) – 157 dead (Boeing 737 MAX software failure).
+
+---
+
+2000s: American Airlines Flight 587 (2001) – 265 Dead
+Date: November 12, 2001
+  - Aircraft: Airbus A300
+  - Location: New York City, USA
+  - Cause: Pilot-induced rudder failure in wake turbulence.
+
+Other Major Crashes:
+
+Air France Flight 447 (2009) – 228 dead (stall over the Atlantic).
+
+Colgan Air Flight 3407 (2009) – 50 dead (pilot error). 

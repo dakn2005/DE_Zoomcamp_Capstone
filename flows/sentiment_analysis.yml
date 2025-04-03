@@ -3,8 +3,16 @@ namespace: zoomcamp
 description: |
   capstone 'backfill' sentiment analyses from summary texts
 
+inputs:
+  - id: classify
+    type: SELECT
+    displayName: select classification exerrcise
+    values: ['Classification only', 'Validation only', 'Both']
+    defaults: 'Validation only'
+
 variables:
   file: "{{trigger.date | date('yyyy-MM-dd hh:mm:ss')}}"
+  # llm_prompt: 'from the text classify into these options: Manufacturer defect/negligence, Operator error, Pilot error, Terrorism, Indeterminate; do not explain and do not give a null, the answer must be classified into one of the provided categories, if unsure choose Indeterminate: '
 
 tasks:
   - id: set_label
@@ -12,55 +20,101 @@ tasks:
     labels:
       timestamp: "{{render(vars.file)}}"
 
-  - id: classification_by_llm
-    type: io.kestra.plugin.gcp.bigquery.Query
-    sql: |
-      DECLARE prompt_text STRING;
-      SET prompt_text = 'from the text classify into these options: Manufacturer defect/negligence, Operator error, Pilot error, Terrorism, Indeterminate; do not explain and do not give a null, the answer must be classified into one of the provided categories, if unsure choose Indeterminate: ';
+  - id: if_classification
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{inputs.classify == 'Classification only' or inputs.classify == 'Both'}}"
+    then:
+      - id: classification_by_llm
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          DECLARE prompt_text STRING;
+          SET prompt_text = 'from the text classify into these options: Manufacturer defect/negligence, Operator error, Pilot error, Terrorism, Indeterminate; do not explain and do not give a null, the answer must be classified into one of the provided categories, if unsure choose Indeterminate: ';
 
-      MERGE INTO `zoomcamp_capstone.fct_incident_data` AS t
-      USING (
-        WITH prompt_tab AS (
-          SELECT 
-            record_id,
-            CONCAT(prompt_text, summary) AS prompt,
-            summary
-          FROM `zoomcamp_capstone.fct_incident_data`
-          WHERE ml_classification is null
-          and summary is not null
-          AND record_id not in (select record_id from `zoomcamp_capstone.bck_records_sentiment`)
-          LIMIT 15
-        ),
-        s AS (
-          SELECT 
-            record_id,
-            prompt,
-            ml_generate_text_llm_result
-          FROM ML.GENERATE_TEXT(
-            MODEL `marine-base-449315-s5.models.gemini_model1`,
-            (SELECT * FROM prompt_tab),
-            STRUCT(
-              0.1 AS temperature, 100 AS max_output_tokens, 0.5 AS top_p,
-              40 AS top_k, TRUE AS flatten_json_output
+          MERGE INTO `zoomcamp_capstone.fct_incident_data` AS t
+          USING (
+            WITH prompt_tab AS (
+              SELECT 
+                record_id,
+                CONCAT(prompt_text, summary) AS prompt,
+                summary
+              FROM `zoomcamp_capstone.fct_incident_data`
+              WHERE ml_classification is null
+              and summary is not null
+              AND record_id not in (select record_id from `zoomcamp_capstone.bck_records_sentiment`)
+              LIMIT 15
+            ),
+            s AS (
+              SELECT 
+                record_id,
+                prompt,
+                ml_generate_text_llm_result
+              FROM ML.GENERATE_TEXT(
+                MODEL `marine-base-449315-s5.models.gemini_model1`,
+                (SELECT * FROM prompt_tab),
+                STRUCT(
+                  0.1 AS temperature, 100 AS max_output_tokens, 0.5 AS top_p,
+                  40 AS top_k, TRUE AS flatten_json_output
+                )
+              )
             )
-          )
-        )
-        SELECT * FROM s
-      ) AS output
-      ON t.record_id = output.record_id
-      WHEN MATCHED THEN
-        UPDATE SET ml_classification = output.ml_generate_text_llm_result
-      ;
+            SELECT * FROM s
+          ) AS output
+          ON t.record_id = output.record_id
+          WHEN MATCHED THEN
+            UPDATE SET ml_classification = output.ml_generate_text_llm_result
+          ;
 
-      create or replace table `zoomcamp_capstone.bck_records_sentiment`
-      as
-      select 
-        record_id, 
-        ml_classification
-      from `zoomcamp_capstone.fct_incident_data`
-      where ml_classification <> ''
-      ;
+          create or replace table `zoomcamp_capstone.bck_records_sentiment`
+          as
+          select 
+            record_id, 
+            ml_classification
+          from `zoomcamp_capstone.fct_incident_data`
+          where ml_classification <> ''
+          ;
 
+  - id: if_validation
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{inputs.classify == 'Validation only' or inputs.classify == 'Both'}}"
+    then:
+      - id: classification_by_llm_validation
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          DECLARE prompt_text STRING;
+          SET prompt_text = 'from the text classify into these options: Manufacturer defect/negligence, Operator error, Pilot error, Terrorism, Indeterminate; do not explain and do not give a null, the answer must be classified into one of the provided categories, if unsure choose Indeterminate: ';
+
+          MERGE INTO `zoomcamp_capstone.fct_incident_data` AS t
+          USING (
+            WITH prompt_tab AS (
+              SELECT 
+                record_id,
+                CONCAT(prompt_text, summary) AS prompt,
+                summary
+              FROM `zoomcamp_capstone.fct_incident_data`
+              WHERE ml_classification is not null
+              and rand() < .01
+              LIMIT 15
+            ),
+            s AS (
+              SELECT 
+                record_id,
+                prompt,
+                ml_generate_text_llm_result
+              FROM ML.GENERATE_TEXT(
+                MODEL `marine-base-449315-s5.models.gemini_model1`,
+                (SELECT * FROM prompt_tab),
+                STRUCT(
+                  0.1 AS temperature, 100 AS max_output_tokens, 0.5 AS top_p,
+                  40 AS top_k, TRUE AS flatten_json_output
+                )
+              )
+            )
+            SELECT * FROM s
+          ) AS output
+          ON t.record_id = output.record_id
+          WHEN MATCHED THEN
+            UPDATE SET ml_validation = output.ml_generate_text_llm_result
+          ;
 
 pluginDefaults:
   - type: io.kestra.plugin.gcp
