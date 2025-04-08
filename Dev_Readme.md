@@ -51,6 +51,18 @@ Classification options
 - Indeterminate
 
 #### Bigquey ML
+Follow the [link](https://cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-create-remote-model#palm-api-text-models) to access documentation on  models creation
+
+Start by creating a model. Sample code is given below:
+
+```
+Create or replace model `project_id.dataset.model_name`
+REMOTE WITH CONNECTION {`project_id.region.connection_id` | DEFAULT}
+OPTIONS (ENDPOINT = 'gemini-1.0-pro')
+```
+
+Below is a code of reading from the Summary column to the specific classification criteria 
+
 ```
 DECLARE prompt_text STRING;
 SET prompt_text = 'from the text classify into these options: Manufacturer defect/negligence, Operator error, Pilot error, Terrorism, Indeterminate; do not explain and do not give a null, the answer must be classified into one of the provided categories, if unsure choose Indeterminate: ';

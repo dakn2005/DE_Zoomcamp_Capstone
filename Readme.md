@@ -1,10 +1,12 @@
 # Plane Incidents over the Century
 ### Introduction
-Having been on several flights this year got me thinking about recent plane incidents, with one of the major airline manufacturers instantly coming into my mind; including the Sunita Williams space shuttle snafu.
 
-On this, I recently read an article from [The Guardian](https://www.theguardian.com/us-news/2025/mar/01/plane-crash-safety-data) on plane safety data. as quoted from the article:
+![KQ](public/kq.jpg =x50)
+Having been on several flights this year got me thinking about recent plane incidents, with one of the major airline manufacturers instantly coming into my mind - thinking on the Sunita Williams space shuttle snafu.
+
+On this, I recently read an article from [The Guardian](https://www.theguardian.com/us-news/2025/mar/01/plane-crash-safety-data) on plane safety data. As quoted from the article:
 ```
-But the numbers suggest 2025 has actually been a relatively safe year to fly – at least in terms of the overall number of accidents". 
+... But the numbers suggest 2025 has actually been a relatively safe year to fly – at least in terms of the overall number of accidents". 
 ```
 
 ### Problem Statement
@@ -22,15 +24,18 @@ We can use this data to answer some interesting questions are plane incidents
 The [planecrashinfo](https://www.planecrashinfo.com/) website that collates incidents data from various sources.
 The data is obtained by clicking on the database section of the website, 
 ![landing page](public/pc0.png)
+
 after clicking on the database link, the years are displayed as below
 ![landing page](public/pc1.png)
+
 on clicking on a selected year, the table below is shown
 ![landing page](public/pc2.png)
+
 after clicking on a specific date, the below details are obtained. 
 ![landing page](public/pc3.png)
 
-Fortunately, this process is automated in a Kestra flow, and the schema described in the <kbd>data</kbd> section is obtained
-
+Fortunately, this process is automated in a Kestra flow, as described in the [data ingestion](#data-ingestion) section. 
+Below is the final data schema
 
 #### Data (Schema)
 The data contains the fields below: 
@@ -50,12 +55,12 @@ The data contains the fields below:
 
 ### Technologies
 - Docker (containerization)
-- Terraform (infrastructure as code)
+- Terraform (infrastructure as code) - decided on using Terraform for tools uniformity
 - Kestra (workflow orchestration)
 - Google Cloud Storage (data lake)
 - BigQuery (data warehouse)
   - Bigquery ML ([classification of summaries](#bigquery-ml))
-- dbt (data transformation)
+- DBT Cloud (data transformation)
 - Looker Studio (data visualization)
 
 ## Reproducability
@@ -159,16 +164,39 @@ pluginDefaults:
 
 </details>
 
+<details>
+<summary>Bigquery LLM setup</summary>
+Follow the steps below to integrate LLM Model in Bigquery
+
+1. create an external connection: Go to Add Data -> search for vertex AI -> input connection ID; be cognizant of the Region as per your setup
+![LLM Setup](public/llm_setup.png)
+
+2.  Once setup, go to the connection, copy the service ID
+3.  Add a principle, with the Vertex AI user role, add the service ID as the New Principal's name
+4.  Add a model, described in [this document](Dev_Readme.md)
+5.  Follow the sample code from [this document](Dev_Readme.md)
+</details>
+
 ## Data Pipeline
+The pipelines ran 2 **Batch** jobs periodically. The pipeline architecture is as below:
+
 ![landing page](public/IaC.png)
 
 The steps employed are:
-  - Extract (get data from source, in this case the [planecrashinfo](https://www.planecrashinfo.com/) website)
+  -  Extract (get data from source, in this case the [planecrashinfo](https://www.planecrashinfo.com/) website) 
   - Load - convert data from the website into CSVs -> this is then saved in a bucket on Google Cloud Storage -> which is then loaded into an external table
   - Transform - convert into analytics views from the external table. The processes are described below in the [dbt cloud section](#transformation-using-dbt-cloud)
 
-### Orchestration
-I use Kestra for Orchestration. Orchestration is the process of bringing together disparate activities into a continuous workflow, normally given the monicker 'flow'. 
+### Data Ingestion
+I use Kestra for Orchestration of the batch jobs; Orchestration is the process of bringing together disparate activities into a continuous workflow, normally given the monicker 'flow'. 
+
+- Plane Incidents flow - Gets data from the web into a CSV file on gcs bucket
+
+![plane incidents flow](public/flow_extract.png)
+
+- Sentiments flow - populates the ml_classification column using summary text classified by gemini LLM
+  
+![sentiments flow](public/flow_sentiment%20analysis.png)
 
 
 ### Data Warehouse
@@ -195,7 +223,7 @@ N.B - the classification process accuracy is > 80%. Using the naive approach of 
 Classifications are also backed up into a table outside the DBT models; this is because each classification takes on average ~6s, and with a dataset of ~5k records, this takes approximately *30,000s* to process all the commentaries. The backup table acts as a seed file in dbt when (re)building the models
 
 
-### Transformation using DBT Cloud
+### Transformations using DBT Cloud
 I used dbt cloud which contains the below setup steps:
 
 - Register an account
@@ -206,7 +234,9 @@ I used dbt cloud which contains the below setup steps:
 
 The link to the dbt repo is [here](https://github.com/dakn2005/dbt_capstone_repo).
 
-The models folder described the schema of the database from external table -> staging table -> facts table -> analytics views ![dbt models, db schema](public/dbt_schema.png)
+The models folder described the schema of the database from external table -> staging table -> facts table -> analytics views ![dbt models, db schema](public/dbt_schema.png). 
+
+NB: I did not optimize the tables with partitioning and clustering since the data size is trivial (~5k records)
 
 The repo also contains several [macros](github.com/dakn2005/dbt_capstone_repo/tree/main/macros) which aide in the data transformation process. Of note is the get_plane_manufacturer_name that maps partial named strings into structured manufacturer names e.g. Mc, MD and Mc Douglas are mapped into McDonnell Douglas.
 
@@ -269,9 +299,9 @@ Airbus Industrie (1970)
 
 
 ## Conclusion
-So, as initially claimed in the [problem statement](#problem-statement), it has gotten better in terms of safety which is good news. Despite of this, we have to keep on being vigilant, as witnessed with recent major incidents - in terms of fatalities and incidents' cause - summaries (by chatgpt) within the last 3 decades
+So, as initially claimed in the [problem statement](#problem-statement), it has gotten better in terms of safety, which is good news. Despite of this, we have to keep on being vigilant, as witnessed with recent major incidents 
 
-
+In terms of fatalities and incidents' cause below are my summaries of note within the last 3 decades (summarised by chatgpt)
 
 2020s: China Eastern Airlines Flight 5735 (2022) – 132 Dead
   - Date: March 21, 2022
