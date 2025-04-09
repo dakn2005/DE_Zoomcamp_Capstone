@@ -1,10 +1,12 @@
 # Plane Incidents over the Century
-### Introduction
 
-![KQ](public/kq.jpg =x50)
+### Introduction 
+<img src="public/kq.jpg" alt="kq" width="100" />
+<!-- ![KQ](public/kq.jpg =x50) -->
 Having been on several flights this year got me thinking about recent plane incidents, with one of the major airline manufacturers instantly coming into my mind - thinking on the Sunita Williams space shuttle snafu.
 
 On this, I recently read an article from [The Guardian](https://www.theguardian.com/us-news/2025/mar/01/plane-crash-safety-data) on plane safety data. As quoted from the article:
+
 ```
 ... But the numbers suggest 2025 has actually been a relatively safe year to fly – at least in terms of the overall number of accidents". 
 ```
@@ -35,7 +37,7 @@ after clicking on a specific date, the below details are obtained.
 ![landing page](public/pc3.png)
 
 Fortunately, this process is automated in a Kestra flow, as described in the [data ingestion](#data-ingestion) section. 
-Below is the final data schema
+Below is the extracted schema
 
 #### Data (Schema)
 The data contains the fields below: 
@@ -218,13 +220,17 @@ The classifications are performed by Googles Gemini LLM, integrated into a Bigqu
 
 These classifications are then used in the final dashboard to check on *manufacturer defect/negligence* incidents-count per manufacture.
 
-N.B - the classification process accuracy is > 80%. Using the naive approach of manually checking the summary vs output from the LLM, some summaries have a vague classification. Also the LLM has a bias of classification on mention of a keyword e.g. a commentary mentioning a pilot might wrongly be classified into *pilot error*
+N.B - to validate the generated classifications, I used two methods:
+
+- Using a validation approach for checking the classification process, I samples ~10% (642 of 5018 total records) of the database randomly and re-ran the llm on the summaries for classification. This was saved in the ml_validation column. On comparing the validation classification to the earlier classifications (in ml_classification column), only 6 records don't match up i.e. 6/642 validation records which is 0.934% accuracy of LLM classification - this does not directly translate to correct interpretation as noted in the next point 
+
+- Using the naive approach of manually checking the summary vs output from the LLM, some summaries have a vague classification. Also the LLM has a bias of classification on mention of a keyword e.g. a commentary mentioning a pilot might wrongly be classified into *pilot error*. An improvement on these analytics would be the need for human annotation/classification on all records
 
 Classifications are also backed up into a table outside the DBT models; this is because each classification takes on average ~6s, and with a dataset of ~5k records, this takes approximately *30,000s* to process all the commentaries. The backup table acts as a seed file in dbt when (re)building the models
 
 
 ### Transformations using DBT Cloud
-I used dbt cloud which contains the below setup steps:
+I used dbt cloud, using the below setup steps:
 
 - Register an account
 - Create a project, follow the instructions as guided by dbt
@@ -242,16 +248,19 @@ The repo also contains several [macros](github.com/dakn2005/dbt_capstone_repo/tr
 
 
 
-## [Dashboards](https://lookerstudio.google.com/s/h85L32U2D1E)
-The dashboards contain two pages;
+## Dashboards
+
+> [Follow this link for the live dashboards, expiring April 30th 2025](https://lookerstudio.google.com/s/odm6RQoF0QU)
+
+The dashboards contain two pages, containing analytics which answer the questions asked in the [Objective section](#objective)
 
 Incidents Overview
 ![incidents overview](public/dash_overview.png)
 
 Incidents Classification
-![incidents classified](public/dash_classification.png)
+![incidents classified](public/dash_classification_2.png)
 
->  *Some major data points to consider when looking into the data (summarised by chatgpt)*
+>  *Some major data points to consider when looking into the data (courtesy of chatgpt)*
 
 
 1960s: Commercial Jet Boom
@@ -301,7 +310,7 @@ Airbus Industrie (1970)
 ## Conclusion
 So, as initially claimed in the [problem statement](#problem-statement), it has gotten better in terms of safety, which is good news. Despite of this, we have to keep on being vigilant, as witnessed with recent major incidents 
 
-In terms of fatalities and incidents' cause below are my summaries of note within the last 3 decades (summarised by chatgpt)
+In terms of fatalities and incidents' causes, below are summaries of some major incidents within the last 3 decades (summarised by chatgpt). 
 
 2020s: China Eastern Airlines Flight 5735 (2022) – 132 Dead
   - Date: March 21, 2022
