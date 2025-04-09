@@ -1,6 +1,26 @@
 # Plane Incidents over the Century
 
-### Introduction 
+### Table of contents
+
+  - [Introduction](#introduction)
+  - [Problem Statement](#problem-statement)
+  - [Objective](#objective)
+    - [Data Sources](#data-sources)
+      - [Data (Schema)](#data-schema)
+    - [Technologies](#technologies)
+  - [Reproducability](#reproducability)
+  - [Data Pipeline](#data-pipeline)
+  - [Data Ingestion](#data-ingestion)
+  - [Data Warehouse](#data-warehouse)
+  - [BigQuery ML](#bigquery-ml)
+  - [Transformations using DBT Cloud](#transformations-using-dbt-cloud)
+  - [Dashboards](#dashboards)
+  - [Conclusion](#conclusion)
+
+---
+---
+
+### Introduction
 <img src="public/kq.jpg" alt="kq" width="100" />
 <!-- ![KQ](public/kq.jpg =x50) -->
 Having been on several flights this year got me thinking about recent plane incidents, with one of the major airline manufacturers instantly coming into my mind - thinking on the Sunita Williams space shuttle snafu.
@@ -8,7 +28,7 @@ Having been on several flights this year got me thinking about recent plane inci
 On this, I recently read an article from [The Guardian](https://www.theguardian.com/us-news/2025/mar/01/plane-crash-safety-data) on plane safety data. As quoted from the article:
 
 ```
-... But the numbers suggest 2025 has actually been a relatively safe year to fly – at least in terms of the overall number of accidents". 
+... But the numbers suggest 2025 has actually been a relatively safe year to fly – at least in terms of the overall number of accidents".
 ```
 
 ### Problem Statement
@@ -24,7 +44,7 @@ We can use this data to answer some interesting questions are plane incidents
 4. which manufacturer is calpable - investigating incidents classified as manufacturer defect/negligence?
 ### Data Sources
 The [planecrashinfo](https://www.planecrashinfo.com/) website that collates incidents data from various sources.
-The data is obtained by clicking on the database section of the website, 
+The data is obtained by clicking on the database section of the website,
 ![landing page](public/pc0.png)
 
 after clicking on the database link, the years are displayed as below
@@ -33,14 +53,14 @@ after clicking on the database link, the years are displayed as below
 on clicking on a selected year, the table below is shown
 ![landing page](public/pc2.png)
 
-after clicking on a specific date, the below details are obtained. 
+after clicking on a specific date, the below details are obtained.
 ![landing page](public/pc3.png)
 
-Fortunately, this process is automated in a Kestra flow, as described in the [data ingestion](#data-ingestion) section. 
+Fortunately, this process is automated in a Kestra flow, as described in the [data ingestion](#data-ingestion) section.
 Below is the extracted schema
 
 #### Data (Schema)
-The data contains the fields below: 
+The data contains the fields below:
 - Date
 - Time
 - Location
@@ -71,8 +91,8 @@ The data contains the fields below:
 
 - Follow the GCP instructions in setting up a project
 
-- We set up a service account to aide Kestra/Terraform/Other infrastructure tool in accessing the GCP platform. 
-  
+- We set up a service account to aide Kestra/Terraform/Other infrastructure tool in accessing the GCP platform.
+
 - Configure the GCP service account by accessing I&M and Admin -> service accounts -> create service account. Add the required roles (Bigquery Admin, Compute Admin and Storage Admin)
 
 - To get the service account key, click on the dropdown -> manage keys -> create key (choose JSON). This downloads the key to be used in Kestra to setup Bigquery db and Bucket in this instance
@@ -81,9 +101,9 @@ The data contains the fields below:
 
 <details>
 <summary>Kestra Setup</summary>
-Ensure to docker is setup and installed as per your operating system (ensure docker engine is installed). Follow the instructions [here](https://docs.docker.com/engine/install/). 
+Ensure to docker is setup and installed as per your operating system (ensure docker engine is installed). Follow the instructions [here](https://docs.docker.com/engine/install/).
 
-Go the [kestra website](https://kestra.io/docs/getting-started/quickstart#start-kestra) -> get Started -> goto the commands code. 
+Go the [kestra website](https://kestra.io/docs/getting-started/quickstart#start-kestra) -> get Started -> goto the commands code.
 
 ```
 docker run --pull=always --rm -it -p 8080:8080 --user=root -v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp kestra/kestra:latest server local
@@ -147,9 +167,9 @@ tasks:
   - id: create_gcs_bucket
     type: io.kestra.plugin.gcp.gcs.CreateBucket
     storageClass: REGIONAL
-    name: "{{kv('GCP_BUCKET_NAME')}}" 
+    name: "{{kv('GCP_BUCKET_NAME')}}"
     ifExists: SKIP
-    
+
   - id: create_bq_dataset
     type: io.kestra.plugin.gcp.bigquery.CreateDataset
     name: "{{kv('GCP_DATASET')}}"
@@ -185,19 +205,19 @@ The pipelines ran 2 **Batch** jobs periodically. The pipeline architecture is as
 ![landing page](public/IaC.png)
 
 The steps employed are:
-  -  Extract (get data from source, in this case the [planecrashinfo](https://www.planecrashinfo.com/) website) 
+  -  Extract (get data from source, in this case the [planecrashinfo](https://www.planecrashinfo.com/) website)
   - Load - convert data from the website into CSVs -> this is then saved in a bucket on Google Cloud Storage -> which is then loaded into an external table
   - Transform - convert into analytics views from the external table. The processes are described below in the [dbt cloud section](#transformation-using-dbt-cloud)
 
 ### Data Ingestion
-I use Kestra for Orchestration of the batch jobs; Orchestration is the process of bringing together disparate activities into a continuous workflow, normally given the monicker 'flow'. 
+I use Kestra for Orchestration of the batch jobs; Orchestration is the process of bringing together disparate activities into a continuous workflow, normally given the monicker 'flow'.
 
 - Plane Incidents flow - Gets data from the web into a CSV file on gcs bucket
 
 ![plane incidents flow](public/flow_extract.png)
 
 - Sentiments flow - populates the ml_classification column using summary text classified by gemini LLM
-  
+
 ![sentiments flow](public/flow_sentiment%20analysis.png)
 
 
@@ -210,7 +230,7 @@ I use Kestra for Orchestration of the batch jobs; Orchestration is the process o
 
 ### BigQuery ML
 From the schema, the *Summary* column gives a commentary on the (probable) cause of the incident. I use this column to classify the incidents into the options below. These are saved in the *ml_classification* column:
-- Manufacturer defect/egligence 
+- Manufacturer defect/egligence
 - Operator(ions) error
 - Pilot error
 - Terrorism
@@ -222,7 +242,7 @@ These classifications are then used in the final dashboard to check on *manufact
 
 N.B - to validate the generated classifications, I used two methods:
 
-- Using a validation approach for checking the classification process, I samples ~10% (642 of 5018 total records) of the database randomly and re-ran the llm on the summaries for classification. This was saved in the ml_validation column. On comparing the validation classification to the earlier classifications (in ml_classification column), only 6 records don't match up i.e. 6/642 validation records which is 0.934% accuracy of LLM classification - this does not directly translate to correct interpretation as noted in the next point 
+- Using a validation approach for checking the classification process, I samples ~10% (642 of 5018 total records) of the database randomly and re-ran the llm on the summaries for classification. This was saved in the ml_validation column. On comparing the validation classification to the earlier classifications (in ml_classification column), only 6 records don't match up i.e. 6/642 validation records which is 0.934% accuracy of LLM classification - this does not directly translate to correct interpretation as noted in the next point
 
 - Using the naive approach of manually checking the summary vs output from the LLM, some summaries have a vague classification. Also the LLM has a bias of classification on mention of a keyword e.g. a commentary mentioning a pilot might wrongly be classified into *pilot error*. An improvement on these analytics would be the need for human annotation/classification on all records
 
@@ -240,11 +260,11 @@ I used dbt cloud, using the below setup steps:
 
 The link to the dbt repo is [here](https://github.com/dakn2005/dbt_capstone_repo).
 
-The models folder described the schema of the database from external table -> staging table -> facts table -> analytics views ![dbt models, db schema](public/dbt_schema.png). 
+The models folder described the schema of the database from external table -> staging table -> facts table -> analytics views ![dbt models, db schema](public/dbt_schema.png).
 
 NB: I did not optimize the tables with partitioning and clustering since the data size is trivial (~5k records)
 
-The repo also contains several [macros](github.com/dakn2005/dbt_capstone_repo/tree/main/macros) which aide in the data transformation process. Of note is the get_plane_manufacturer_name that maps partial named strings into structured manufacturer names e.g. Mc, MD and Mc Douglas are mapped into McDonnell Douglas.
+The repo also contains several [macros](https://github.com/dakn2005/dbt_capstone_repo/tree/main/macros) which aide in the data transformation process. Of note is the get_plane_manufacturer_name that maps partial named strings into structured manufacturer names e.g. Mc, MD and Mc Douglas are mapped into McDonnell Douglas.
 
 
 
@@ -279,7 +299,7 @@ Airbus Industrie (1970)
 
 - First aircraft: A300 (world’s first twin-engine widebody jet).
 
---- 
+---
 
 1990s: Industry Shakeups & Megamergers
 - Lockheed & Martin Marietta → Lockheed Martin (1995)
@@ -296,7 +316,7 @@ Airbus Industrie (1970)
 
   - Focused on military aircraft, including stealth technology.
 
---- 
+---
 
 2020s: Ongoing Consolidation
 - Airbus acquires full control of A220 program (2020)
@@ -308,9 +328,9 @@ Airbus Industrie (1970)
 
 
 ## Conclusion
-So, as initially claimed in the [problem statement](#problem-statement), it has gotten better in terms of safety, which is good news. Despite of this, we have to keep on being vigilant, as witnessed with recent major incidents 
+So, as initially claimed in the [problem statement](#problem-statement), it has gotten better in terms of safety, which is good news. Despite of this, we have to keep on being vigilant, as witnessed with recent major incidents
 
-In terms of fatalities and incidents' causes, below are summaries of some major incidents within the last 3 decades (summarised by chatgpt). 
+In terms of fatalities and incidents' causes, below are summaries of some major incidents within the last 3 decades (summarised by chatgpt).
 
 2020s: China Eastern Airlines Flight 5735 (2022) – 132 Dead
   - Date: March 21, 2022
@@ -324,14 +344,14 @@ Pakistan International Airlines Flight 8303 (2020) – 97 dead (pilot error).
 
 Nepal Yeti Airlines Flight 691 (2023) – 72 dead (pilot confusion).
 
---- 
+---
 
 2010s: Malaysia Airlines Flight 370 (2014) – 239 Missing
 Date: March 8, 2014
   - Aircraft: Boeing 777
   - Location: Disappeared over the Indian Ocean
   - Cause: Unknown (presumed pilot suicide or system failure).
-  
+
 Other Major Crashes:
 
 Malaysia Airlines Flight 17 (2014) – 298 dead (shot down over Ukraine).
@@ -352,4 +372,4 @@ Other Major Crashes:
 
 Air France Flight 447 (2009) – 228 dead (stall over the Atlantic).
 
-Colgan Air Flight 3407 (2009) – 50 dead (pilot error). 
+Colgan Air Flight 3407 (2009) – 50 dead (pilot error).
