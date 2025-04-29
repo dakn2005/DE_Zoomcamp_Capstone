@@ -242,7 +242,7 @@ These classifications are then used in the final dashboard to check on *manufact
 
 N.B - to validate the generated classifications, I used two methods:
 
-- Using a validation approach for checking the classification process, I samples ~10% (642 of 5018 total records) of the database randomly and re-ran the llm on the summaries for classification. This was saved in the ml_validation column. On comparing the validation classification to the earlier classifications (in ml_classification column), only 6 records don't match up i.e. 6/642 validation records which is 0.934% accuracy of LLM classification - this does not directly translate to correct interpretation as noted in the next point
+- Using a validation approach for checking the classification process, I samples ~10% (642 of 5018 total records) of the database randomly and re-ran the llm on the summaries for classification. This was saved in the ml_validation column. On comparing the validation classification to the earlier classifications (in ml_classification column), only 6 records don't match up i.e. 6/642 validation records which is 99.065% accuracy of LLM classification - this does not directly translate to correct interpretation as noted in the next point
 
 - Using the naive approach of manually checking the summary vs output from the LLM, some summaries have a vague classification. Also the LLM has a bias of classification on mention of a keyword e.g. a commentary mentioning a pilot might wrongly be classified into *pilot error*. An improvement on these analytics would be the need for human annotation/classification on all records
 
